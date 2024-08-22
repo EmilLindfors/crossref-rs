@@ -36,6 +36,10 @@ pub enum Facet {
     AssertionGroup,
     /// Publisher name of work
     PublisherName,
+    /// Journal issue number
+    JournalIssue,
+    /// Journal volume number
+    JournalVolume,
 }
 
 impl Facet {
@@ -70,6 +74,8 @@ impl Facet {
             Facet::RelationType => "relation-type",
             Facet::AssertionGroup => "assertion-group",
             Facet::PublisherName => "publisher-name",
+            Facet::JournalIssue => "journal-issue",
+            Facet::JournalVolume => "journal-volume",
         }
     }
 }

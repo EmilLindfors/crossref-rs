@@ -328,6 +328,8 @@ pub enum Sort {
         )
     )]
     ReferenceCount,
+    Created,
+    Relevance
 }
 
 impl Sort {
@@ -344,6 +346,9 @@ impl Sort {
             Sort::Issued => "issued",
             Sort::IsReferencedByCount => "is-reference-by-count",
             Sort::ReferenceCount => "reference-count",
+            Sort::Created => "created",
+            Sort::Relevance => "relevance"
+            
         }
     }
 }
