@@ -1,10 +1,9 @@
 [package]
 name = "crossref-rs"
-edition.workspace = true
-version.workspace = true
-author.workspace = true
-description.workspace = true
-documentation.workspace = true
+edition = 2021
+version = 0.1
+author = "Emil Lindfors"
+
 
 [dependencies]
 common = { path = "../common"}
