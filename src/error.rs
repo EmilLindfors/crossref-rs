@@ -70,6 +70,12 @@ pub enum ErrorKind {
     /// if a error in serde occurred
     #[fail(display = "invalid serde: {}", error)]
     Serde { error: serde_json::Error },
+
+    #[fail(display = "{}", error)]
+    DoiValidationError { error: String },
+
+    #[fail(display = "{}", error)]
+    ClientError { error: String },
 }
 
 impl From<ErrorKind> for Error {
@@ -95,3 +101,4 @@ impl From<reqwest::Error> for Error {
         ErrorKind::ReqWest { reqwest }.into()
     }
 }
+

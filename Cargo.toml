@@ -1,26 +1,14 @@
 [package]
-name = "crossref"
-version = "0.2.2"
-authors = ["matthiasseitz <matthias.seitz@tum.de>"]
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-keywords = ["api", "web", "literature", "doi"]
-repository = "https://github.com/MattsSe/crossref-rs"
-description= "Implementation of the Crossref API"
-documentation = "https://docs.rs/crossref/"
-categories = ["api-bindings", "science"]
-edition = "2018"
-
-[badges]
-travis-ci = { repository = "MattsSe/crossref-rs", branch = "master" }
-
-[[bin]]
-name = "crossref"
-path = "src/crossref.rs"
-required-features =["cli"]
+name = "crossref-rs"
+edition.workspace = true
+version.workspace = true
+author.workspace = true
+description.workspace = true
+documentation.workspace = true
 
 [dependencies]
-reqwest = "0.9"
+common = { path = "../common"}
+reqwest = { version = "0.11", features = ["blocking", "json"]}
 serde = { version = "1.0", features = ["derive"] }
 failure = "0.1"
 serde_json = "1.0"
@@ -28,6 +16,7 @@ chrono =  { version = "0.4", features = ["serde"] }
 structopt =  { version = "0.2", optional = true }
 url = "1.7"
 pretty_env_logger = { version = "0.3", optional = true }
+async-iterator = {path = "../async-iterator" }
 
 [features]
 cli = ["structopt", "pretty_env_logger"]

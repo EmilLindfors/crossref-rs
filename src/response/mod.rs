@@ -2,6 +2,7 @@ use crate::query::facet::Facet;
 use crate::query::facet::FacetCount;
 use crate::query::Visibility;
 use crate::response::work::*;
+use failure::Fail;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
@@ -139,6 +140,7 @@ impl<'de> Deserialize<'de> for Response {
             }))
         }
 
+
         let message = match fragment.message {
             Some(msg) => Some(match &fragment.message_type {
                 MessageType::ValidationFailure => msg_arm!(ValidationFailure, msg),
@@ -201,7 +203,7 @@ impl_list_response!(
 #[serde(untagged)]
 pub enum Message {
     /// if a request failed on the server side
-    ValidationFailure(Vec<Failure>),
+    ValidationFailure(Failures),
     /// a route could not be found on the server side
     RouteNotFound,
     /// the agency for a specific work
@@ -342,6 +344,22 @@ pub struct FacetItem {
 
 /// response item if a request could be processed
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Failures(Vec<Failure>);
+
+impl Failures {
+    /// checks if the response contains a failure
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// checks if the response contains a failure
+    pub fn get_doi_error(&self) -> Option<String> {
+        self.0.iter().find(|f| f.is_doi()).map(|f| f.message.clone())
+    }
+}
+
+/// response item if a request could be processed
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Failure {
     /// identifier for a failue like `parameter-not-found`
@@ -350,7 +368,13 @@ pub struct Failure {
     /// value that caused the failure
     value: String,
     /// the message from the server
-    message: String,
+    pub message: String,
+}
+
+impl Failure {
+    pub fn is_doi(&self) -> bool {
+        self.type_ == "doi-not-valid"
+    }
 }
 
 /// response item for the `/funder/{id}` route

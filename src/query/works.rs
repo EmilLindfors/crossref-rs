@@ -12,6 +12,134 @@ use structopt::StructOpt;
 
 /// Filters allow you to narrow queries. All filter results are lists
 #[derive(Debug, Clone)]
+pub enum WorkElement {
+    DOI,
+    ISBN,
+    ISSN,
+    URL,
+    Abstract_,
+    Accepted,
+    AlternativeId,
+    Approved,
+    Archive,
+    ArticleNumber,
+    Assertion,
+    Author,
+    Chair,
+    ClinicalTrialNumber,
+    ContainerTitle,
+    ContentCreated,
+    ContentDomain,
+    Created,
+    Degree,
+    Deposited,
+    Editor,
+    Event,
+    Funder,
+    GroupTitle,
+    Indexed,
+    IsReferencedByCount,
+    IssnType,
+    Issue,
+    Issued,
+    License,
+    Link,
+    Member,
+    OriginalTitle,
+    Page,
+    Posted,
+    Prefix,
+    Published,
+    PublishedOnline,
+    PublishedPrint,
+    Publisher,
+    PublisherLocation,
+    Reference,
+    ReferencesCount,
+    Relation,
+    Score,
+    ShortContainerTitle,
+    ShortTitle,
+    StandardsBody,
+    Subject,
+    Subtitle,
+    Title,
+    Translator,
+    Type,
+    UpdatePolicy,
+    UpdateTo,
+    UpdatedBy,
+    Volume,
+}
+
+impl WorkElement {
+    /// the identifier for a the query key
+    pub fn name(&self) -> &str {
+        match self {
+            WorkElement::DOI => "DOI",
+            WorkElement::ISBN => "ISBN",
+            WorkElement::ISSN => "ISSN",
+            WorkElement::URL => "URL",
+            WorkElement::Abstract_ => "abstract",
+            WorkElement::Accepted => "accepted",
+            WorkElement::AlternativeId => "alternative-id",
+            WorkElement::Approved => "approved",
+            WorkElement::Archive => "archive",
+            WorkElement::ArticleNumber => "article-number",
+            WorkElement::Assertion => "assertion",
+            WorkElement::Author => "author",
+            WorkElement::Chair => "chair",
+            WorkElement::ClinicalTrialNumber => "clinical-trial-number",
+            WorkElement::ContainerTitle => "container-title",
+            WorkElement::ContentCreated => "content-created",
+            WorkElement::ContentDomain => "content-domain",
+            WorkElement::Created => "created",
+            WorkElement::Degree => "degree",
+            WorkElement::Deposited => "deposited",
+            WorkElement::Editor => "editor",
+            WorkElement::Event => "event",
+            WorkElement::Funder => "funder",
+            WorkElement::GroupTitle => "group-title",
+            WorkElement::Indexed => "indexed",
+            WorkElement::IsReferencedByCount => "is-referenced-by-count",
+            WorkElement::IssnType => "issn-type",
+            WorkElement::Issue => "issue",
+            WorkElement::Issued => "issued",
+            WorkElement::License => "license",
+            WorkElement::Link => "link",
+            WorkElement::Member => "member",
+            WorkElement::OriginalTitle => "original-title",
+            WorkElement::Page => "page",
+            WorkElement::Posted => "posted",
+            WorkElement::Prefix => "prefix",
+            WorkElement::Published => "published",
+            WorkElement::PublishedOnline => "published-online",
+            WorkElement::PublishedPrint => "published-print",
+            WorkElement::Publisher => "publisher",
+            WorkElement::PublisherLocation => "publisher-location",
+            WorkElement::Reference => "reference",
+            WorkElement::ReferencesCount => "references-count",
+            WorkElement::Relation => "relation",
+            WorkElement::Score => "score",
+            WorkElement::ShortContainerTitle => "short-container-title",
+            WorkElement::ShortTitle => "short-title",
+            WorkElement::StandardsBody => "standards-body",
+            WorkElement::Subject => "subject",
+            WorkElement::Subtitle => "subtitle",
+            WorkElement::Title => "title",
+            WorkElement::Translator => "translator",
+            WorkElement::Type => "type",
+            WorkElement::UpdatePolicy => "update-policy",
+            WorkElement::UpdateTo => "update-to",
+            WorkElement::UpdatedBy => "updated-by",
+            WorkElement::Volume => "volume",
+        }
+    }
+}
+
+
+/// Filters allow you to narrow queries. All filter results are lists
+#[derive(Debug, Clone)]
 pub enum WorksFilter {
     /// metadata which includes one or more funder entry
     HasFunder,
@@ -306,7 +434,7 @@ impl FieldQuery {
     /// creates a new `Field` query for `title` and `subtitle`
     pub fn title(title: &str) -> Self {
         Self {
-            name: "title".to_string(),
+            name: "query.title".to_string(),
             value: title.to_string(),
         }
     }
@@ -321,7 +449,7 @@ impl FieldQuery {
     /// creates a new `Field` query author given and family names
     pub fn author(author: &str) -> Self {
         Self {
-            name: "author".to_string(),
+            name: "query.author".to_string(),
             value: author.to_string(),
         }
     }
@@ -707,6 +835,12 @@ impl WorksQuery {
         self
     }
 
+        /// select which fields to return
+        pub fn elements(mut self, element: Vec<WorkElement>) -> Self {
+            self.elements.extend(element.into_iter());
+            self
+        }
+
     /// ```edition2018
     /// use crossref::{FieldQuery,WorksQuery};
     ///
@@ -826,6 +960,8 @@ pub struct WorksQuery {
     pub sort: Option<Sort>,
     /// set the sort order to `asc` or `desc`
     pub order: Option<Order>,
+    /// elements to return
+    pub elements: Vec<WorkElement>,
     /// enable facet information in responses
     pub facets: Vec<FacetCount>,
     /// deep page through `/works` result sets
@@ -854,6 +990,16 @@ impl CrossrefRoute for WorksQuery {
         }
         if !self.filter.is_empty() {
             params.push(self.filter.param());
+        }
+        if !self.elements.is_empty() {
+    
+            let mut elements = self.elements.iter().fold("select=".to_string(), |mut acc, e| {
+                acc.push_str(e.name());
+                acc.push_str(",");
+                acc
+            });
+            elements.pop();
+            params.push(Cow::Owned(elements));
         }
         if !self.facets.is_empty() {
             params.push(self.facets.param());

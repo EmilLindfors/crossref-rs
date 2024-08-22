@@ -3,7 +3,8 @@
 use crate::error::Result;
 use crate::response::{FacetMap, QueryResponse};
 use crate::{Crossref, WorkListQuery, WorksQuery};
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
+use common::entities::{JournalEntity, WorkEntity};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -39,7 +40,7 @@ pub struct WorkList {
 #[allow(missing_docs)]
 pub struct Work {
     /// Name of work's publisher
-    pub publisher: String,
+    pub publisher: Option<String>,
     /// Work titles, including translated titles
     pub title: Vec<String>,
     /// Work titles in the work's original publication language
@@ -52,25 +53,25 @@ pub struct Work {
     #[serde(rename = "abstract")]
     pub abstract_: Option<String>,
     /// Count of outbound references deposited with Crossref
-    pub references_count: i32,
+    pub references_count: Option<i32>,
     /// Count of inbound references deposited with Crossref
-    pub is_referenced_by_count: i32,
+    pub is_referenced_by_count: Option<i32>,
     /// Currently always `Crossref`
-    pub source: String,
+    pub source: Option<String>,
     pub journal_issue: Option<Issue>,
     /// DOI prefix identifier of the form `http://id.crossref.org/prefix/DOI_PREFIX`
-    pub prefix: String,
+    pub prefix: Option<String>,
     /// DOI of the work
     #[serde(rename = "DOI")]
-    pub doi: String,
+    pub doi: Option<String>,
     /// URL form of the work's DOI
     #[serde(rename = "URL")]
-    pub url: String,
+    pub url: Option<String>,
     /// Member identifier of the form `http://id.crossref.org/member/MEMBER_ID`
-    pub member: String,
+    pub member: Option<String>,
     /// Enumeration, one of the type ids from `https://api.crossref.org/v1/types`
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: Option<String>,
     /// the day this work entry was created
     pub created: Option<Date>,
     /// Date on which the DOI was first registered
@@ -82,9 +83,9 @@ pub struct Work {
     pub score: Option<f32>,
     /// Date on which the work metadata was most recently indexed.
     /// Re-indexing does not imply a metadata change, see `deposited` for the most recent metadata change date
-    pub indexed: Date,
+    pub indexed: Option<Date>,
     /// Earliest of `published-print` and `published-online`
-    pub issued: PartialDate,
+    pub issued: Option<PartialDate>,
     /// ate on which posted content was made available online
     pub posted: Option<PartialDate>,
     /// Date on which a work was accepted, after being submitted, during a submission process
@@ -144,6 +145,87 @@ pub struct Work {
     pub review: Option<Relations>,
 }
 
+impl From<Work> for WorkEntity {
+    fn from(work: Work) -> Self {
+        println!("work: {:?}", work);
+        let pdf = match work.link {
+            Some(links) => {
+                let pdfs = links
+                    .iter()
+                    .filter(|link| link.content_type == Some("application/pdf".to_string()))
+                    .collect::<Vec<_>>();
+                if pdfs.len() > 0 {
+                    Some(pdfs[0].url.clone())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        let date = if let Some(date) = work.date {
+            Some(date)
+        } else if let Some(date) = work.issued {
+            Some(Date {
+                date_parts: date.date_parts,
+                timestamp: 0,
+                date_time: "".to_string(),
+            })
+        } else {
+          None
+        };
+
+  
+
+        WorkEntity {
+            id: 0,
+            citekey: to_citekey(work.author.unwrap_or(vec![]), date)
+                .unwrap_or(work.doi.clone().unwrap_or("".to_string())),
+            doi: work.doi.unwrap_or("".to_string()),
+            title: work.title.join(" "),
+            publication_date: "".to_string(),
+            abstract_: work.abstract_,
+            journal_id: None,
+            pdf,
+            link: work.url,
+            reference_count: work.references_count.unwrap_or(0),
+        }
+    }
+}
+
+// AuthorYear (e.g. Smith2019) or Author&AuthorYear (e.g. Smith&Jones2019) or AuthorEtAlYear (e.g. SmithEtAl2019)
+fn to_citekey(authors: Vec<Contributor>, year: Option<Date>) -> Option<String> {
+    if let Some(authors) = {
+        if authors.len() == 0 {
+            return None;
+        } else if authors.len() == 1 {
+            authors[0].family.clone()
+        } else if authors.len() == 2 {
+            Some(format!(
+                "{}&{}",
+                authors[0].family.clone().unwrap_or("".to_string()),
+                authors[1].family.clone().unwrap_or("".to_string())
+            ))
+        } else {
+            Some(format!(
+                "{}EtAl",
+                authors[0].family.clone().unwrap_or("".to_string())
+            ))
+        }
+    } {
+        let Some(date) = year
+            .and_then(|d| d.date_parts.as_date())
+            .and_then(|d| Some(d.year()))
+        else {
+            return None;
+        };
+
+        Some(format!("{}{}", authors, date))
+    } else {
+        return None;
+    }
+}
+
 /// Helper struct to represent dates in the cross ref api as nested arrays of numbers
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct DateParts(pub Vec<Vec<Option<u32>>>);
@@ -157,9 +239,9 @@ impl DateParts {
         fn naive(v: &[Option<u32>]) -> Option<NaiveDate> {
             match v.len() {
                 0 => None,
-                1 => Some(NaiveDate::from_ymd(v[0]? as i32, 0, 0)),
-                2 => Some(NaiveDate::from_ymd(v[0]? as i32, v[1]?, 0)),
-                3 => Some(NaiveDate::from_ymd(v[0]? as i32, v[1]?, v[2]?)),
+                1 => NaiveDate::from_ymd_opt(v[0]? as i32, 0, 0),
+                2 => NaiveDate::from_ymd_opt(v[0]? as i32, v[1]?, 0),
+                3 => NaiveDate::from_ymd_opt(v[0]? as i32, v[1]?, v[2]?),
                 _ => None,
             }
         }
@@ -212,7 +294,7 @@ pub struct ClinicalTrialNumber {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[allow(missing_docs)]
 pub struct Contributor {
-    pub family: String,
+    pub family: Option<String>,
     pub given: Option<String>,
     /// URL-form of an [ORCID](http://orcid.org) identifier
     #[serde(rename = "ORCID")]
@@ -249,6 +331,21 @@ impl Date {
     pub fn as_date_field(&self) -> Option<DateField> {
         self.date_parts.as_date()
     }
+
+    pub fn to_string(&self) -> String {
+        match self.as_date_field() {
+            Some(DateField::Single(date)) => date.format("%Y-%m-%d").to_string(),
+            Some(DateField::Range { from, to }) => {
+                format!("{}-{}", from.format("%Y-%m-%d"), to.format("%Y-%m-%d"))
+            }
+            Some(DateField::Multi(dates)) => dates
+                .iter()
+                .map(|date| date.format("%Y-%m-%d").to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+            None => "".to_string(),
+        }
+    }
 }
 
 /// represents an incomplete date only consisting of year or year and month
@@ -282,6 +379,16 @@ pub enum DateField {
     },
     /// more than two date vectors are present
     Multi(Vec<NaiveDate>),
+}
+
+impl DateField {
+    pub fn year(&self) -> i32 {
+        match self {
+            DateField::Single(date) => date.year(),
+            DateField::Range { from, to } => from.year(),
+            DateField::Multi(dates) => dates[0].year(),
+        }
+    }
 }
 
 /// metadata about when the `Work` entry was updated
@@ -594,5 +701,4 @@ mod tests {
 
         let work: Work = from_str(work_str).unwrap();
     }
-
 }

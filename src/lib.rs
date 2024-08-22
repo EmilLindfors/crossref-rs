@@ -241,7 +241,7 @@
 //! ```
 
 #![deny(warnings)]
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 #![allow(unused)]
 
 mod error;
@@ -277,9 +277,12 @@ pub(crate) use self::response::{Message, Response};
 use crate::error::ErrorKind;
 use crate::query::{FundersQuery, MembersQuery, ResourceComponent};
 use crate::response::{MessageType, Prefix};
+use async_iterator::Iterator;
 use reqwest::{self, Client};
+use std::default;
 use std::iter::FlatMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 macro_rules! get_item {
     ($ident:ident, $value:expr, $got:expr) => {
@@ -306,8 +309,8 @@ macro_rules! impl_combined_works_query {
         $(
         /// Return one page of the components's `Work` that match the query
         ///
-        pub fn $name(&self, ident: WorksIdentQuery) -> Result<WorkList> {
-            let resp = self.get_response(&$component::Works(ident))?;
+        pub async fn $name(&self, ident: WorksIdentQuery) -> Result<WorkList> {
+            let resp = self.get_response(&$component::Works(ident)).await?;
             get_item!(WorkList, resp.message, resp.message_type)
         })+
     };
@@ -319,7 +322,8 @@ pub struct Crossref {
     /// use another base url than `api.crossref.org`
     pub base_url: String,
     /// the reqwest client that handles the requests
-    pub client: Rc<Client>,
+    pub client: Client,
+    //pub blocking_client: Arc<reqwest::blocking::Client>,
 }
 
 impl Crossref {
@@ -343,21 +347,78 @@ impl Crossref {
     /// If it was a bad url, the server will return `Resource not found` a `ResourceNotFound` error will be returned in this case
     /// Also fails if the json response body could be parsed into `Response`
     /// Fails if there was an error in reqwest executing the request [::reqwest::RequestBuilder::send]
-    fn get_response<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
-        let resp = self
-            .client
-            .get(&query.to_url(&self.base_url)?)
-            .send()?
-            .text()?;
-        if resp.starts_with("Resource not found") {
-            Err(ErrorKind::ResourceNotFound {
-                resource: Box::new(query.clone().resource_component()),
+    async fn get_response<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
+        let q = query.to_url(&self.base_url)?;
+        println!("requesting: {}", q);
+
+        let resp: std::result::Result<Response, reqwest::Error> =
+            self.client.get(&q).send().await?.json().await;
+
+        match resp {
+            Ok(resp) => {
+                if resp.status == "ok" {
+                    Ok(resp)
+                } else {
+                    if let Some(message) = resp.message {
+                        match message {
+                            Message::ValidationFailure(error) => {
+                                if let Some(err) = error.get_doi_error() {
+                                    Err(ErrorKind::DoiValidationError { error: err }.into())
+                                } else {
+                                    Err(ErrorKind::ClientError {
+                                        error: "crossref error".to_string(),
+                                    }
+                                    .into())
+                                }
+                            }
+                            _ => Err(ErrorKind::ClientError {
+                                error: "crossref error".to_string(),
+                            }
+                            .into()),
+                        }
+                    } else {
+                        Err(ErrorKind::ClientError {
+                            error: "crossref error".to_string(),
+                        }
+                        .into())
+                    }
+                }
             }
-            .into())
-        } else {
-            Ok(serde_json::from_str(&resp)?)
+            Err(e) => {
+                if e.is_status() {
+                    let status = e.status().unwrap();
+                    if status == reqwest::StatusCode::NOT_FOUND {
+                        Err(ErrorKind::ResourceNotFound {
+                            resource: Box::new(query.clone().resource_component()),
+                        }
+                        .into())
+                    } else {
+                        println!("status: {:?}", e);
+                        Err(ErrorKind::ReqWest { reqwest: e }.into())
+                    }
+                } else {
+                    println!("status: {:?}", e);
+                    Err(ErrorKind::ReqWest { reqwest: e }.into())
+                }
+            }
         }
     }
+
+    //fn get_response_blocking<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
+    //    let resp = self
+    //        .blocking_client
+    //        .get(&query.to_url(&self.base_url)?)
+    //        .send()?
+    //        .text()?;
+    //    if resp.starts_with("Resource not found") {
+    //        Err(ErrorKind::ResourceNotFound {
+    //            resource: Box::new(query.clone().resource_component()),
+    //        }
+    //        .into())
+    //    } else {
+    //        Ok(serde_json::from_str(&resp)?)
+    //    }
+    //}
 
     /// Return the `Work` items that match a certain query.
     ///
@@ -387,8 +448,9 @@ impl Crossref {
     /// This method fails if the `works` element expands to a bad route `ResourceNotFound`
     /// Fails if the response body doesn't have `message` field `MissingMessage`.
     /// Fails if anything else than a `WorkList` is returned as message `UnexpectedItem`
-    pub fn works<T: Into<WorkListQuery>>(&self, query: T) -> Result<WorkList> {
-        let resp = self.get_response(&query.into())?;
+    pub async fn works<T: Into<WorkListQuery>>(&self, query: T) -> Result<WorkList> {
+        let resp = self.get_response(&query.into()).await?;
+
         get_item!(WorkList, resp.message, resp.message_type)
     }
 
@@ -397,8 +459,10 @@ impl Crossref {
     /// # Errors
     /// This method fails if the doi could not identified `ResourceNotFound`
     ///
-    pub fn work(&self, doi: &str) -> Result<Work> {
-        let resp = self.get_response(&Works::Identifier(doi.to_string()))?;
+    pub async fn work(&self, doi: &str) -> Result<Work> {
+        let resp = self
+            .get_response(&Works::Identifier(doi.to_string()))
+            .await?;
         get_item!(Work, resp.message, resp.message_type).map(|x| *x)
     }
 
@@ -493,55 +557,65 @@ impl Crossref {
     /// # Errors
     /// This method fails if the doi could not identified `ResourceNotFound`
     ///
-    pub fn work_agency(&self, doi: &str) -> Result<WorkAgency> {
-        let resp = self.get_response(&Works::Agency(doi.to_string()))?;
+    pub async fn work_agency(&self, doi: &str) -> Result<WorkAgency> {
+        let resp = self.get_response(&Works::Agency(doi.to_string())).await?;
         get_item!(WorkAgency, resp.message, resp.message_type)
     }
 
     /// Return the matching `Funders` items.
-    pub fn funders(&self, funders: FundersQuery) -> Result<FunderList> {
-        let resp = self.get_response(&Funders::Query(funders))?;
+    pub async fn funders(&self, funders: FundersQuery) -> Result<FunderList> {
+        let resp = self.get_response(&Funders::Query(funders)).await?;
         get_item!(FunderList, resp.message, resp.message_type)
     }
 
     /// Return the `Funder` for the `id`
-    pub fn funder(&self, id: &str) -> Result<Funder> {
-        let resp = self.get_response(&Funders::Identifier(id.to_string()))?;
+    pub async fn funder(&self, id: &str) -> Result<Funder> {
+        let resp = self
+            .get_response(&Funders::Identifier(id.to_string()))
+            .await?;
         get_item!(Funder, resp.message, resp.message_type).map(|x| *x)
     }
 
     /// Return the matching `Members` items.
-    pub fn members(&self, members: MembersQuery) -> Result<MemberList> {
-        let resp = self.get_response(&Members::Query(members))?;
+    pub async fn members(&self, members: MembersQuery) -> Result<MemberList> {
+        let resp = self.get_response(&Members::Query(members)).await?;
         get_item!(MemberList, resp.message, resp.message_type)
     }
 
     /// Return the `Member` for the `id`
-    pub fn member(&self, member_id: &str) -> Result<Member> {
-        let resp = self.get_response(&Members::Identifier(member_id.to_string()))?;
+    pub async fn member(&self, member_id: &str) -> Result<Member> {
+        let resp = self
+            .get_response(&Members::Identifier(member_id.to_string()))
+            .await?;
         get_item!(Member, resp.message, resp.message_type).map(|x| *x)
     }
 
     /// Return the `Prefix` for the `id`
-    pub fn prefix(&self, id: &str) -> Result<Prefix> {
-        let resp = self.get_response(&Prefixes::Identifier(id.to_string()))?;
+    pub async fn prefix(&self, id: &str) -> Result<Prefix> {
+        let resp = self
+            .get_response(&Prefixes::Identifier(id.to_string()))
+            .await?;
         get_item!(Prefix, resp.message, resp.message_type)
     }
     /// Return a specific `Journal`
-    pub fn journal(&self, id: &str) -> Result<Journal> {
-        let resp = self.get_response(&Journals::Identifier(id.to_string()))?;
+    pub async fn journal(&self, id: &str) -> Result<Journal> {
+        let resp = self
+            .get_response(&Journals::Identifier(id.to_string()))
+            .await?;
         get_item!(Journal, resp.message, resp.message_type).map(|x| *x)
     }
 
     /// Return all available `Type`
-    pub fn types(&self) -> Result<TypeList> {
-        let resp = self.get_response(&Types::All)?;
+    pub async fn types(&self) -> Result<TypeList> {
+        let resp = self.get_response(&Types::All).await?;
         get_item!(TypeList, resp.message, resp.message_type)
     }
 
     /// Return the `Type` for the `id`
-    pub fn type_(&self, id: &Type) -> Result<CrossrefType> {
-        let resp = self.get_response(&Types::Identifier(id.id().to_string()))?;
+    pub async fn type_(&self, id: &Type) -> Result<CrossrefType> {
+        let resp = self
+            .get_response(&Types::Identifier(id.id().to_string()))
+            .await?;
         get_item!(Type, resp.message, resp.message_type)
     }
 
@@ -558,9 +632,10 @@ impl Crossref {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn random_dois(&self, len: usize) -> Result<Vec<String>> {
+    pub async fn random_dois(&self, len: usize) -> Result<Vec<String>> {
         self.works(WorksQuery::random(len))
-            .map(|x| x.items.into_iter().map(|x| x.doi).collect())
+            .await
+            .map(|x| x.items.into_iter().map(|x| x.doi.unwrap()).collect())
     }
 }
 
@@ -645,17 +720,24 @@ impl CrossrefBuilder {
             );
         }
         let client = reqwest::Client::builder()
-            .default_headers(headers)
+            .default_headers(headers.clone())
             .build()
             .map_err(|_| ErrorKind::Config {
                 msg: "failed to initialize TLS backend".to_string(),
             })?;
 
+        //let blocking_client = reqwest::blocking::Client::builder()
+        //    .default_headers(headers)
+        //    .build()
+        //    .map_err(|_| ErrorKind::Config {
+        //        msg: "failed to initialize TLS backend".to_string(),
+        //    })?;
+
         Ok(Crossref {
             base_url: self
                 .base_url
                 .unwrap_or_else(|| Crossref::BASE_URL.to_string()),
-            client: Rc::new(client),
+            client, // blocking_client: Arc::new(blocking_client),
         })
     }
 }
@@ -671,17 +753,29 @@ pub struct WorkListIterator<'a> {
     /// whether the iterator should finish next iteration
     finish_next_iteration: bool,
 }
+
 impl<'a> WorkListIterator<'a> {
-    /// convenience method to create a `WorkIterator`
-    pub fn into_work_iter(self) -> impl Iterator<Item = Work> + 'a {
-        self.flat_map(|x| x.items)
+    pub fn new<'b: 'a>(query: WorkListQuery, client: &'b Crossref) -> Self {
+        Self {
+            query,
+            client,
+            index: 0,
+            finish_next_iteration: false,
+        }
     }
 }
 
-impl<'a> Iterator for WorkListIterator<'a> {
+//impl<'a> WorkListIterator<'a> {
+//    /// convenience method to create a `WorkIterator`
+//    pub fn into_work_iter(self) -> impl async_iterator::Iterator<Item = WorkList> + 'a {
+//        self.client.get_response(&self.query)
+//    }
+//}
+
+impl<'a> async_iterator::Iterator for WorkListIterator<'a> {
     type Item = WorkList;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    async fn next(&mut self) -> Option<Self::Item> {
         if self.finish_next_iteration {
             return None;
         }
@@ -695,7 +789,7 @@ impl<'a> Iterator for WorkListIterator<'a> {
             }
         }
 
-        let resp = self.client.get_response(&self.query);
+        let resp = self.client.get_response(&self.query).await;
         if let Ok(resp) = resp {
             let worklist: Result<WorkList> = get_item!(WorkList, resp.message, resp.message_type);
             if let Ok(worklist) = worklist {
