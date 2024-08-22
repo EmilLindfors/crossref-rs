@@ -4,7 +4,6 @@ use crate::error::Result;
 use crate::response::{FacetMap, QueryResponse};
 use crate::{Crossref, WorkListQuery, WorksQuery};
 use chrono::{Datelike, NaiveDate};
-use common::entities::{JournalEntity, WorkEntity};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -143,54 +142,6 @@ pub struct Work {
     pub relation: Option<Relations>,
     /// Peer review metadata
     pub review: Option<Relations>,
-}
-
-impl From<Work> for WorkEntity {
-    fn from(work: Work) -> Self {
-        println!("work: {:?}", work);
-        let pdf = match work.link {
-            Some(links) => {
-                let pdfs = links
-                    .iter()
-                    .filter(|link| link.content_type == Some("application/pdf".to_string()))
-                    .collect::<Vec<_>>();
-                if pdfs.len() > 0 {
-                    Some(pdfs[0].url.clone())
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
-
-        let date = if let Some(date) = work.date {
-            Some(date)
-        } else if let Some(date) = work.issued {
-            Some(Date {
-                date_parts: date.date_parts,
-                timestamp: 0,
-                date_time: "".to_string(),
-            })
-        } else {
-          None
-        };
-
-  
-
-        WorkEntity {
-            id: 0,
-            citekey: to_citekey(work.author.unwrap_or(vec![]), date)
-                .unwrap_or(work.doi.clone().unwrap_or("".to_string())),
-            doi: work.doi.unwrap_or("".to_string()),
-            title: work.title.join(" "),
-            publication_date: "".to_string(),
-            abstract_: work.abstract_,
-            journal_id: None,
-            pdf,
-            link: work.url,
-            reference_count: work.references_count.unwrap_or(0),
-        }
-    }
 }
 
 // AuthorYear (e.g. Smith2019) or Author&AuthorYear (e.g. Smith&Jones2019) or AuthorEtAlYear (e.g. SmithEtAl2019)
