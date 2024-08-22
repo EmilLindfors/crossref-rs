@@ -1,7 +1,7 @@
 [package]
-name = "crossref-rs"
-edition = 2021
-version = 0.1
+name = "crossref"
+edition = "2021"
+version = "0.1"
 author = "Emil Lindfors"
 
 
