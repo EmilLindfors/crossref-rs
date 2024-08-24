@@ -351,57 +351,18 @@ impl Crossref {
         let q = query.to_url(&self.base_url)?;
         println!("requesting: {}", q);
 
-        let resp: std::result::Result<Response, reqwest::Error> =
-            self.client.get(&q).send().await?.json().await;
-
-        match resp {
-            Ok(resp) => {
-                if resp.status == "ok" {
-                    Ok(resp)
-                } else {
-                    if let Some(message) = resp.message {
-                        match message {
-                            Message::ValidationFailure(error) => {
-                                if let Some(err) = error.get_doi_error() {
-                                    Err(ErrorKind::DoiValidationError { error: err }.into())
-                                } else {
-                                    Err(ErrorKind::ClientError {
-                                        error: "crossref error".to_string(),
-                                    }
-                                    .into())
-                                }
-                            }
-                            _ => Err(ErrorKind::ClientError {
-                                error: "crossref error".to_string(),
-                            }
-                            .into()),
-                        }
-                    } else {
-                        Err(ErrorKind::ClientError {
-                            error: "crossref error".to_string(),
-                        }
-                        .into())
-                    }
-                }
-            }
+        let res: std::result::Result<serde_json::Value, reqwest::Error> = self.client.get(&q).send().await?.json().await;
+        
+        match res {
+            Ok(json) => {
+                Ok(Response::try_from(json)?)
+            },
             Err(e) => {
-                if e.is_status() {
-                    let status = e.status().unwrap();
-                    if status == reqwest::StatusCode::NOT_FOUND {
-                        Err(ErrorKind::ResourceNotFound {
-                            resource: Box::new(query.clone().resource_component()),
-                        }
-                        .into())
-                    } else {
-                        println!("status: {:?}", e);
-                        Err(ErrorKind::ReqWest { reqwest: e }.into())
-                    }
-                } else {
-                    println!("status: {:?}", e);
-                    Err(ErrorKind::ReqWest { reqwest: e }.into())
-                }
+                Err(ErrorKind::ReqWest { reqwest: e }.into())
+
             }
         }
+        
     }
 
     //fn get_response_blocking<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
@@ -602,6 +563,10 @@ impl Crossref {
         let resp = self
             .get_response(&Journals::Identifier(id.to_string()))
             .await?;
+
+        println!("{:?}", resp.message);
+        println!("{:?}", resp.message_type);
+      
         get_item!(Journal, resp.message, resp.message_type).map(|x| *x)
     }
 

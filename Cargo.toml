@@ -16,5 +16,9 @@ url = "1.7"
 pretty_env_logger = { version = "0.3", optional = true }
 async-iterator = "2.3"
 
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+
 [features]
 cli = ["structopt", "pretty_env_logger"]

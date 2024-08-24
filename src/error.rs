@@ -32,6 +32,13 @@ impl fmt::Display for Error {
 /// all different error types this crate uses
 #[derive(Debug, Fail)]
 pub enum ErrorKind {
+    /// if a message type was invalid
+    #[fail(display = "invalid message type: {}", name)]
+    InvalidMessageType {
+        /// the message type that was invalid
+        name: String,
+    },
+
     /// if an invalid type was requested
     #[fail(display = "invalid type name: {}", name)]
     InvalidTypeName { name: String },
@@ -48,6 +55,18 @@ pub enum ErrorKind {
     /// a config error
     #[fail(display = "{}", msg)]
     Config {
+        /// the notification
+        msg: String,
+    },
+
+    #[fail(display = "{}", msg)]
+    MissingField {
+        /// the notification
+        msg: String,
+    },
+
+    #[fail(display = "{}", msg)]
+    InvalidField {
         /// the notification
         msg: String,
     },
@@ -101,4 +120,3 @@ impl From<reqwest::Error> for Error {
         ErrorKind::ReqWest { reqwest }.into()
     }
 }
-

@@ -1,9 +1,11 @@
+mod journal;
+pub use journal::*;
+use crate::error::ErrorKind;
 use crate::query::facet::Facet;
 use crate::query::facet::FacetCount;
 use crate::query::Visibility;
 use crate::response::work::*;
 use failure::Fail;
-
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
@@ -31,6 +33,59 @@ pub struct Response {
     pub message: Option<Message>,
 }
 
+impl TryFrom<serde_json::Value> for Response {
+    type Error = ErrorKind;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Object(map) => {
+                let status = map.get("status").ok_or_else(|| ErrorKind::MissingField {
+                    msg: "status".to_string(),
+                })?;
+                let message_type =
+                    map.get("message-type")
+                        .ok_or_else(|| ErrorKind::MissingField {
+                            msg: "message-type".to_string(),
+                        })?;
+                let message_type = MessageType::from_str(message_type.as_str().ok_or_else(
+                            || ErrorKind::InvalidField {
+                                msg: "message-type".to_string(),
+                            },
+                        )?)?;
+                let message_version =
+                    map.get("message-version")
+                        .ok_or_else(|| ErrorKind::MissingField {
+                            msg: "message-version".to_string(),
+                        })?;
+                let message = map.get("message").ok_or_else(|| ErrorKind::MissingField {
+                    msg: "message".to_string(),
+                })?;
+
+                let message = Message::try_from((message_type.clone(), message.clone()))?;
+
+                Ok(Response {
+                    status: status
+                        .as_str()
+                        .ok_or_else(|| ErrorKind::InvalidField {
+                            msg: "status".to_string(),
+                        })?
+                        .to_string(),
+                    message_type,
+                    message_version: message_version
+                        .as_str()
+                        .ok_or_else(|| ErrorKind::InvalidField {
+                            msg: "message-version".to_string(),
+                        })?
+                        .to_string(),
+                    message: Some(message),
+                })
+            }
+            _ => Err(ErrorKind::InvalidField {
+                msg: "response".to_string(),
+            }),
+        }
+    }
+}
 /// at some routes the `msg_version` is missing, this returns the default version for a crossref response
 fn default_msg_version() -> String {
     "1.0.0".to_string()
@@ -142,7 +197,6 @@ impl<'de> Deserialize<'de> for Response {
             }))
         }
 
-
         let message = match fragment.message {
             Some(msg) => Some(match &fragment.message_type {
                 MessageType::ValidationFailure => msg_arm!(ValidationFailure, msg),
@@ -234,6 +288,117 @@ pub enum Message {
     FunderList(FunderList),
 }
 
+impl TryFrom<(MessageType, serde_json::Value)> for Message {
+    type Error = ErrorKind;
+    fn try_from(value: (MessageType, serde_json::Value)) -> Result<Self, Self::Error> {
+        match value {
+            (MessageType::ValidationFailure, value) => {
+                let failures: Failures = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as failures".to_string(),
+                    }
+                })?;
+                Ok(Message::ValidationFailure(failures))
+            }
+            (MessageType::WorkAgency, value) => {
+                let work_agency: WorkAgency = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as work-agency".to_string(),
+                    }
+                })?;
+                Ok(Message::WorkAgency(work_agency))
+            }
+            (MessageType::Prefix, value) => {
+                let prefix: Prefix = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as prefix".to_string(),
+                    }
+                })?;
+                Ok(Message::Prefix(prefix))
+            }
+            (MessageType::Type, value) => {
+                let type_: CrossrefType = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as type".to_string(),
+                    }
+                })?;
+                Ok(Message::Type(type_))
+            }
+            (MessageType::TypeList, value) => {
+                let type_list: TypeList = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as type-list".to_string(),
+                    }
+                })?;
+                Ok(Message::TypeList(type_list))
+            }
+            (MessageType::Work, value) => {
+                let work = Work::try_from(value)?;
+                Ok(Message::Work(Box::new(work)))
+            }
+            (MessageType::WorkList, value) => {
+                let list_resp: WorkList = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as work-list".to_string(),
+                    }
+                })?;
+                Ok(Message::WorkList(list_resp))
+            }
+            (MessageType::Member, value) => {
+                let member: Member = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as member".to_string(),
+                    }
+                })?;
+                Ok(Message::Member(Box::new(member)))
+            }
+            (MessageType::MemberList, value) => {
+                let list_resp: MemberList = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as member-list".to_string(),
+                    }
+                })?;
+                Ok(Message::MemberList(list_resp))
+            }
+            (MessageType::Journal, value) => {
+                let journal = Journal::try_from(value)?;
+                Ok(Message::Journal(Box::new(journal)))
+            }
+            (MessageType::JournalList, value) => {
+                let list_resp: JournalList = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as journal-list".to_string(),
+                    }
+                })?;
+                Ok(Message::JournalList(list_resp))
+                
+            }
+            (MessageType::Funder, value) => {
+                let funder: Funder = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as funder".to_string(),
+                    }
+                })?;
+                Ok(Message::Funder(Box::new(funder)))
+            }
+            (MessageType::FunderList, value) => {
+                let list_resp: FunderList = from_value(value).map_err(|e| {
+                    ErrorKind::InvalidField {
+                        msg: "error parsing message as funder-list".to_string(),
+                    }
+                })?;
+                Ok(Message::FunderList(list_resp))
+            }
+            (MessageType::RouteNotFound, _) => Ok(Message::RouteNotFound),
+            e => Err(ErrorKind::InvalidMessageType {
+                name: e.1.to_string(),
+            }),
+
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[allow(missing_docs)]
 pub struct CrossrefType {
@@ -311,6 +476,29 @@ impl MessageType {
             MessageType::RouteNotFound => "route-not-found",
         }
     }
+
+    /// creates a `MessageType` from a string
+    pub fn from_str(s: &str) -> Result<MessageType, ErrorKind> {
+        match s {
+            "work-agency" => Ok(MessageType::WorkAgency),
+            "funder" => Ok(MessageType::Funder),
+            "prefix" => Ok(MessageType::Prefix),
+            "member" => Ok(MessageType::Member),
+            "member-list" => Ok(MessageType::MemberList),
+            "work" => Ok(MessageType::Work),
+            "work-list" => Ok(MessageType::WorkList),
+            "funder-list" => Ok(MessageType::FunderList),
+            "type" => Ok(MessageType::Type),
+            "type-list" => Ok(MessageType::TypeList),
+            "journal" => Ok(MessageType::Journal),
+            "journal-list" => Ok(MessageType::JournalList),
+            "validation-failure" => Ok(MessageType::ValidationFailure),
+            "route-not-found" => Ok(MessageType::RouteNotFound),
+            _ => Err(ErrorKind::InvalidTypeName {
+                name: s.to_string(),
+            }),
+        }
+    }
 }
 
 impl fmt::Display for MessageType {
@@ -329,6 +517,33 @@ pub struct QueryResponse {
     pub search_terms: Option<String>,
 }
 
+impl TryFrom<serde_json::Value> for QueryResponse {
+    type Error = ErrorKind;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Object(map) => {
+                let start_index = map.get("start-index").ok_or_else(|| ErrorKind::MissingField {
+                    msg: "start-index".to_string(),
+                })?;
+                let search_terms = map.get("search-terms").map(|v| v.as_str().unwrap().to_string());
+
+                Ok(QueryResponse {
+                    start_index: start_index
+                        .as_u64()
+                        .ok_or_else(|| ErrorKind::InvalidField {
+                            msg: "start-index".to_string(),
+                        })? as usize,
+                    search_terms,
+                })
+            }
+            _ => Err(ErrorKind::InvalidField {
+                msg: "query".to_string(),
+            }),
+        }
+    }
+}
+
 // TODO impl CrossrefRoute for QueryResponse
 
 /// facets are returned as map
@@ -344,6 +559,53 @@ pub struct FacetItem {
     pub values: HashMap<String, usize>,
 }
 
+impl TryFrom<serde_json::Value> for FacetItem {
+    type Error = ErrorKind;
+
+  fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+
+    match value {
+        Value::Object(map) => {
+            let value_count = map.get("value-count").ok_or_else(|| ErrorKind::MissingField {
+                msg: "value-count".to_string(),
+            })?;
+            let values = map.get("values").ok_or_else(|| ErrorKind::MissingField {
+                msg: "values".to_string(),
+            })?;
+
+            let values = match values {
+                Value::Object(map) => {
+                    let mut values = HashMap::new();
+                    for (k, v) in map.iter() {
+                        let v = v.as_u64().ok_or_else(|| ErrorKind::InvalidField {
+                            msg: "value".to_string(),
+                        })?;
+                        values.insert(k.to_string(), v as usize);
+                    }
+                    values
+                }
+                _ => return Err(ErrorKind::InvalidField {
+                    msg: "values".to_string(),
+                }),
+            };
+
+            Ok(FacetItem {
+                value_count: value_count
+                    .as_u64()
+                    .ok_or_else(|| ErrorKind::InvalidField {
+                        msg: "value-count".to_string(),
+                    })? as usize,
+                values,
+            })
+        }
+        _ => Err(ErrorKind::InvalidField {
+            msg: "facet".to_string(),
+        }),
+    }
+      
+  }
+}
+
 /// response item if a request could be processed
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Failures(Vec<Failure>);
@@ -356,7 +618,10 @@ impl Failures {
 
     /// checks if the response contains a failure
     pub fn get_doi_error(&self) -> Option<String> {
-        self.0.iter().find(|f| f.is_doi()).map(|f| f.message.clone())
+        self.0
+            .iter()
+            .find(|f| f.is_doi())
+            .map(|f| f.message.clone())
     }
 }
 
@@ -475,24 +740,25 @@ pub struct RefPrefix {
 }
 
 /// response item for the `/journal/{id}` route
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-#[allow(missing_docs)]
-pub struct Journal {
-    /// could not determine type, possible PartialDateParts
-    pub last_status_check_time: Option<Value>,
-    pub counts: Option<Value>,
-    pub breakdowns: Option<Value>,
-    pub publisher: Option<String>,
-    pub coverage: Option<Value>,
-    pub title: Option<String>,
-    pub subjects: Vec<Value>,
-    pub coverage_type: Option<Value>,
-    pub flags: Option<Value>,
-    #[serde(rename = "ISSN")]
-    pub issn: Vec<String>,
-    pub issn_type: Vec<String>,
-}
+//#[derive(Debug, Clone, Deserialize, Serialize)]
+//#[serde(rename_all = "kebab-case")]
+//#[allow(missing_docs)]
+//pub struct Journal {
+//    /// could not determine type, possible PartialDateParts
+//    pub last_status_check_time: Option<Value>,
+//    pub counts: Option<Value>,
+//    pub breakdowns: Option<Value>,
+//    pub publisher: Option<String>,
+//    pub coverage: Option<Value>,
+//    pub title: Option<String>,
+//    pub subjects: Vec<Value>,
+//    pub coverage_type: Option<Value>,
+//    pub flags: Option<Value>,
+//    #[serde(rename = "ISSN")]
+//    pub issn: Vec<String>,
+//    pub issn_type: Vec<String>,
+//}
+
 
 #[cfg(test)]
 mod tests {
@@ -525,8 +791,7 @@ mod tests {
 
     #[test]
     fn agency_msg_deserialize() {
-        let agency_str =
-            r#"{"status":"ok","message-type":"work-agency","message-version":"1.0.0","message":{"DOI":"10.1037\/0003-066x.59.1.29","agency":{"id":"crossref","label":"Crossref"}}}"#;
+        let agency_str = r#"{"status":"ok","message-type":"work-agency","message-version":"1.0.0","message":{"DOI":"10.1037\/0003-066x.59.1.29","agency":{"id":"crossref","label":"Crossref"}}}"#;
 
         let agency: Response = from_str(agency_str).unwrap();
 

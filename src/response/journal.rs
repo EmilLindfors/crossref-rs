@@ -1,5 +1,9 @@
-
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+use crate::error::ErrorKind;
+
+use super::MessageType;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -78,18 +82,165 @@ pub struct Flags {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Journal {
-    pub last_status_check_time: Option<serde_json::Value>,
+    pub last_status_check_time: Option<DateTime<Utc>>,
     pub counts: Counts,
-    pub breakdowns: Option<serde_json::Value>, // You can use Value to represent dynamic data
+    pub breakdowns: Vec<(i64, i64)>, // You can use Value to represent dynamic data
     pub publisher: String,
     pub coverage: Option<serde_json::Value>,
     pub title: String,
     pub subjects: Vec<String>,
     pub coverage_type: Option<serde_json::Value>,
-    pub flags:  Vec<String>,
+    pub flags: Vec<(String, bool)>,
     #[serde(rename = "ISSN")]
     pub issn: Vec<String>,
-    pub issn_type: Vec<String>,
+    pub issn_type: Vec<IssnType>,
+}
+
+impl TryFrom<serde_json::Value> for Journal {
+    type Error = ErrorKind;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        match value {
+            serde_json::Value::Object(map) => {
+                let last_status_check_time = map
+                    .get("last-status-check-time")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "last-status-check-time".to_string(),
+                    })?
+                    .as_i64()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "last-status-check-time".to_string(),
+                    })?;
+                let counts = map
+                    .get("counts")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "counts".to_string(),
+                    })?
+                    .as_object()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "counts".to_string(),
+                    })?;
+                let mut breakdowns: Vec<(i64, i64)> = map.get("breakdowns").ok_or(ErrorKind::MissingField {
+                    msg: "breakdowns".to_string(),
+                })?
+                .get("dois-by-issued-year")
+                .ok_or(ErrorKind::MissingField {
+                    msg: "dois-by-issued-year".to_string(),
+                })?
+                .as_array()
+                .ok_or(ErrorKind::InvalidTypeName {
+                    name: "breakdowns".to_string(),
+                })?
+                .iter()
+                .map(|v| {
+                    let arr = v.as_array().unwrap();
+                    (arr[0].as_i64().unwrap(), arr[1].as_i64().unwrap())
+                })
+                .collect();
+
+                breakdowns.sort_by(|a, b| a.0.cmp(&b.0));
+                
+
+                let publisher = map
+                    .get("publisher")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "publisher".to_string(),
+                    })?
+                    .as_str()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "publisher".to_string(),
+                    })?
+                    .to_string();
+
+                let title = map
+                    .get("title")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "title".to_string(),
+                    })?
+                    .as_str()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "title".to_string(),
+                    })?
+                    .to_string();
+
+                let subjects = map
+                    .get("subjects")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "subjects".to_string(),
+                    })?
+                    .as_array()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "subjects".to_string(),
+                    })?
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect();
+
+                let coverage = map.get("coverage").map(|v| v.clone());
+
+                let coverage_type = map.get("coverage-type").map(|v| v.clone());
+
+                let flags = map
+                    .get("flags")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "flags".to_string(),
+                    })?
+                    .as_object()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "flags".to_string(),
+                    })?
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.as_bool().unwrap()))
+                    .collect();
+
+                let issn = map
+                    .get("ISSN")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "ISSN".to_string(),
+                    })?
+                    .as_array()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "ISSN".to_string(),
+                    })?
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect();
+
+                let issn_type = map
+                    .get("issn-type")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "issn-type".to_string(),
+                    })?
+                    .as_array()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "issn-type".to_string(),
+                    })?
+                    .iter()
+                    .map(|v| serde_json::from_value(v.clone()).unwrap())
+                    .collect();
+
+                let last_status_check_time = DateTime::from_timestamp_millis(last_status_check_time);
+
+                Ok(Journal {
+                    last_status_check_time,
+                    counts: serde_json::from_value(serde_json::Value::Object(counts.clone()))
+                        .unwrap(),
+                    breakdowns,
+                    publisher,
+                    coverage,
+                    title,
+                    subjects,
+                    coverage_type,
+                    flags,
+                    issn,
+                    issn_type,
+                })
+            }
+            _ => Err(ErrorKind::InvalidMessageType {
+                name: value.to_string(),
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -98,12 +249,4 @@ pub struct IssnType {
     pub value: String,
     #[serde(rename = "type")]
     pub type_: String, // Renamed to type_ to avoid keyword conflict
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct ApiResponse {
-    status: String,
-    message_type: String,
-    message_version: String,
-    message: Journal,
 }
