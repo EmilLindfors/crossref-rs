@@ -126,7 +126,7 @@ impl TryFrom<serde_json::Value> for WorkList {
 #[allow(missing_docs)]
 pub struct Work {
     /// Name of work's publisher
-    pub publisher: Option<String>,
+    pub publisher: String,
     /// Work titles, including translated titles
     pub title: Vec<String>,
     /// Work titles in the work's original publication language
@@ -149,17 +149,17 @@ pub struct Work {
     pub prefix: Option<String>,
     /// DOI of the work
     #[serde(rename = "DOI")]
-    pub doi: Option<String>,
+    pub doi: String,
     /// URL form of the work's DOI
     #[serde(rename = "URL")]
     pub url: Option<String>,
     /// Member identifier of the form `http://id.crossref.org/member/MEMBER_ID`
-    pub member: Option<String>,
+    pub member: String,
     /// Enumeration, one of the type ids from `https://api.crossref.org/v1/types`
     #[serde(rename = "type")]
-    pub type_: Option<String>,
+    pub type_: String,
     /// the day this work entry was created
-    pub created: Option<Date>,
+    pub created: Date,
     /// Date on which the DOI was first registered
     pub date: Option<Date>,
     /// Date on which the work metadata was most recently updated
@@ -169,7 +169,7 @@ pub struct Work {
     pub score: Option<f32>,
     /// Date on which the work metadata was most recently indexed.
     /// Re-indexing does not imply a metadata change, see `deposited` for the most recent metadata change date
-    pub indexed: Option<Date>,
+    pub indexed: Date,
     /// Earliest of `published-print` and `published-online`
     pub issued: Option<PartialDate>,
     /// ate on which posted content was made available online
@@ -239,8 +239,14 @@ impl TryFrom<serde_json::Value> for Work {
             Value::Object(map) => {
                 let publisher = map
                     .get("publisher")
-                    .and_then(|v| v.as_str())
-                    .map(|v| v.to_string());
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "publisher".to_string(),
+                    })?
+                    .as_str()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "publisher".to_string(),
+                    })?
+                    .to_string();
 
                 let title: Vec<String> = map
                     .get("title")
@@ -302,8 +308,14 @@ impl TryFrom<serde_json::Value> for Work {
 
                 let doi = map
                     .get("DOI")
-                    .and_then(|v| v.as_str())
-                    .map(|v| v.to_string());
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "DOI".to_string(),
+                    })?
+                    .as_str()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "DOI".to_string(),
+                    })?
+                    .to_string();
 
                 let url = map
                     .get("URL")
@@ -312,18 +324,38 @@ impl TryFrom<serde_json::Value> for Work {
 
                 let member = map
                     .get("member")
-                    .and_then(|v| v.as_str())
-                    .map(|v| v.to_string());
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "member".to_string(),
+                    })?
+                    .as_str()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "member".to_string(),
+                    })?
+                    .to_string();
 
                 let type_ = map
                     .get("type")
-                    .and_then(|v| v.as_str())
-                    .map(|v| v.to_string());
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "type".to_string(),
+                    })?
+                    .as_str()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "type".to_string(),
+                    })?
+                    .to_string();
 
                 let created = map
                     .get("created")
-                    .and_then(|v| v.as_object())
-                    .map(|v| Date::try_from(Value::Object(v.clone())).unwrap());
+                    .ok_or(
+                        ErrorKind::MissingField {
+                            msg: "created".to_string(),
+                        },
+                    )?
+                    .as_object()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "created".to_string(),
+                    })
+                    .map(|v| Date::try_from(Value::Object(v.clone())).unwrap())?;
 
                 let date = map
                     .get("date")
@@ -339,8 +371,14 @@ impl TryFrom<serde_json::Value> for Work {
 
                 let indexed = map
                     .get("indexed")
-                    .and_then(|v| v.as_object())
-                    .map(|v| Date::try_from(Value::Object(v.clone())).unwrap());
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "indexed".to_string(),
+                    })?
+                    .as_object()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "indexed".to_string(),
+                    })
+                    .map(|v| Date::try_from(Value::Object(v.clone())).unwrap())?;
 
                 let issued = map
                     .get("issued")
@@ -790,15 +828,19 @@ impl TryFrom<serde_json::Value> for ClinicalTrialNumber {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[allow(missing_docs)]
 pub struct Contributor {
+    pub prefix: Option<String>,
+    pub suffix: Option<String>,
     pub family: Option<String>,
     pub given: Option<String>,
+    pub name: Option<String>,
     /// URL-form of an [ORCID](http://orcid.org) identifier
     #[serde(rename = "ORCID")]
     pub orcid: Option<String>,
     /// If true, record owner asserts that the ORCID user completed ORCID OAuth authentication
     #[serde(rename = "authenticated-orcid")]
     pub authenticated_orcid: Option<bool>,
-    pub affiliation: Option<Vec<Affiliation>>,
+    pub affiliation: Vec<Affiliation>,
+    pub sequence: String
 }
 
 impl TryFrom<serde_json::Value> for Contributor {
@@ -807,6 +849,19 @@ impl TryFrom<serde_json::Value> for Contributor {
     fn try_from(value: serde_json::Value) -> std::result::Result<Self, Self::Error> {
         match value {
             Value::Object(map) => {
+
+                let prefix = map
+                    .get("prefix")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+
+                let suffix = map
+                    .get("suffix")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+
+
+
                 let family = map
                     .get("family")
                     .and_then(|v| v.as_str())
@@ -814,6 +869,11 @@ impl TryFrom<serde_json::Value> for Contributor {
 
                 let given = map
                     .get("given")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+
+                let name = map
+                    .get("name")
                     .and_then(|v| v.as_str())
                     .map(|v| v.to_string());
 
@@ -827,18 +887,34 @@ impl TryFrom<serde_json::Value> for Contributor {
                     .and_then(|v| v.as_bool())
                     .map(|v| v);
 
-                let affiliation = map.get("affiliation").and_then(|v| v.as_array()).map(|v| {
+                let affiliation = map.get("affiliation").and_then(|v| v.as_array()).ok_or(
+                    ErrorKind::MissingField {
+                        msg: "affiliation".to_string(),
+                    },
+                ).map(|v| {
                     v.iter()
                         .map(|v| Affiliation::try_from(v.clone()).unwrap())
                         .collect()
-                });
+                })?;
+
+                let sequence = map
+                    .get("sequence")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string())
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "sequence".to_string(),
+                    })?;
 
                 Ok(Contributor {
+                    prefix,
+                    suffix,
                     family,
                     given,
+                    name,
                     orcid,
                     authenticated_orcid,
                     affiliation,
+                    sequence
                 })
             }
             _ => Err(ErrorKind::InvalidMessageType {

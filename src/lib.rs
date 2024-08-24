@@ -600,7 +600,7 @@ impl Crossref {
     pub async fn random_dois(&self, len: usize) -> Result<Vec<String>> {
         self.works(WorksQuery::random(len))
             .await
-            .map(|x| x.items.into_iter().map(|x| x.doi.unwrap()).collect())
+            .map(|x| x.items.into_iter().map(|x| x.doi).collect())
     }
 }
 
