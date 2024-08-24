@@ -1,7 +1,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct Counts {
     total_dois: i32,
@@ -9,7 +9,7 @@ struct Counts {
     backfile_dois: i32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct Coverage {
     affiliations_current: i32,
@@ -38,7 +38,7 @@ struct Coverage {
     references_current: i32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct Flags {
     deposits_abstracts_current: bool,
@@ -67,7 +67,7 @@ struct Flags {
     deposits_licenses_current: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct CoverageType {
     all: Coverage,
@@ -75,9 +75,9 @@ struct CoverageType {
     backfile: Coverage,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-struct Journal {
+pub struct Journal {
     last_status_check_time: i64,
     counts: Counts,
     breakdowns: serde_json::Value, // You can use Value to represent dynamic data
@@ -92,7 +92,7 @@ struct Journal {
     issn_type: IssnType,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct IssnType {
     value: String,
