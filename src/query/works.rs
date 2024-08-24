@@ -442,7 +442,7 @@ impl FieldQuery {
     /// creates a new `Field` query for `container-title` aka `publication.name`
     pub fn container_title(container_title: &str) -> Self {
         Self {
-            name: "container-title".to_string(),
+            name: "query.container-title".to_string(),
             value: container_title.to_string(),
         }
     }
@@ -456,28 +456,28 @@ impl FieldQuery {
     /// creates a new `Field` query for editor given and family names
     pub fn editor(editor: &str) -> Self {
         Self {
-            name: "editor".to_string(),
+            name: "query.editor".to_string(),
             value: editor.to_string(),
         }
     }
     /// creates a new `Field` query for chair given and family names
     pub fn chair(chair: &str) -> Self {
         Self {
-            name: "chair".to_string(),
+            name: "query.chair".to_string(),
             value: chair.to_string(),
         }
     }
     /// creates a new `Field` query for translator given and family names
     pub fn translator(translator: &str) -> Self {
         Self {
-            name: "translator".to_string(),
+            name: "query.translator".to_string(),
             value: translator.to_string(),
         }
     }
     /// creates a new `Field` query for author, editor, chair and translator given and family names
     pub fn contributor(contributor: &str) -> Self {
         Self {
-            name: "contributor".to_string(),
+            name: "query.contributor".to_string(),
             value: contributor.to_string(),
         }
     }
@@ -485,14 +485,14 @@ impl FieldQuery {
     /// Includes titles, authors, ISSNs and publication years
     pub fn bibliographic(bibliographic: &str) -> Self {
         Self {
-            name: "bibliographic".to_string(),
+            name: "query.bibliographic".to_string(),
             value: bibliographic.to_string(),
         }
     }
     /// creates a new `Field` query for contributor affiliations
     pub fn affiliation(affiliation: &str) -> Self {
         Self {
-            name: "affiliation".to_string(),
+            name: "query.affiliation".to_string(),
             value: affiliation.to_string(),
         }
     }
