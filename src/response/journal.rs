@@ -78,7 +78,7 @@ pub struct Flags {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Journal {
-    pub last_status_check_time: i64,
+    pub last_status_check_time: Option<serde_json::Value>,
     pub counts: Counts,
     pub breakdowns: Option<serde_json::Value>, // You can use Value to represent dynamic data
     pub publisher: String,

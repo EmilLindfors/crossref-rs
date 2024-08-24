@@ -3,13 +3,14 @@ use crate::query::facet::FacetCount;
 use crate::query::Visibility;
 use crate::response::work::*;
 use failure::Fail;
+
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
 use std::collections::HashMap;
 use std::fmt;
-pub mod journal;
-pub use crate::response::journal::Journal;
+
+//pub use crate::response::journal::Journal;
 /// provides the types for a work response
 pub mod work;
 
@@ -474,24 +475,24 @@ pub struct RefPrefix {
 }
 
 /// response item for the `/journal/{id}` route
-///#[derive(Debug, Clone, Deserialize, Serialize)]
-///#[serde(rename_all = "kebab-case")]
-///#[allow(missing_docs)]
-///pub struct Journal {
-///    /// could not determine type, possible PartialDateParts
-///    pub last_status_check_time: Option<Value>,
-///    pub counts: Option<usize>,
-///    pub breakdowns: Option<Value>,
-///    pub publisher: Option<String>,
-///    pub coverage: Option<Value>,
-///    pub title: Option<String>,
-///    pub subjects: Vec<Value>,
-///    pub coverage_type: Option<Value>,
-///    pub flags: Option<Value>,
-///    #[serde(rename = "ISSN")]
-///    pub issn: Vec<String>,
-///    pub issn_type: Vec<String>,
-///}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[allow(missing_docs)]
+pub struct Journal {
+    /// could not determine type, possible PartialDateParts
+    pub last_status_check_time: Option<Value>,
+    pub counts: Option<Counts>,
+    pub breakdowns: Option<Value>,
+    pub publisher: Option<String>,
+    pub coverage: Option<Value>,
+    pub title: Option<String>,
+    pub subjects: Vec<Value>,
+    pub coverage_type: Option<Value>,
+    pub flags: Option<Value>,
+    #[serde(rename = "ISSN")]
+    pub issn: Vec<String>,
+    pub issn_type: Vec<String>,
+}
 
 #[cfg(test)]
 mod tests {
