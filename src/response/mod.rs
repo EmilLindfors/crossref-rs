@@ -481,7 +481,7 @@ pub struct RefPrefix {
 pub struct Journal {
     /// could not determine type, possible PartialDateParts
     pub last_status_check_time: Option<Value>,
-    pub counts: Option<Counts>,
+    pub counts: Option<Value>,
     pub breakdowns: Option<Value>,
     pub publisher: Option<String>,
     pub coverage: Option<Value>,
