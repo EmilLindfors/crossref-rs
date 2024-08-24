@@ -89,7 +89,7 @@ pub struct Journal {
     pub flags:  Vec<(String, bool)>,
     #[serde(rename = "ISSN")]
     pub issn: Vec<String>,
-    pub issn_type: Vec<IssnType>,
+    pub issn_type: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
