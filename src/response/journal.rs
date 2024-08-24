@@ -80,16 +80,16 @@ pub struct Flags {
 pub struct Journal {
     pub last_status_check_time: i64,
     pub counts: Counts,
-    pub breakdowns: serde_json::Value, // You can use Value to represent dynamic data
+    pub breakdowns: Option<serde_json::Value>, // You can use Value to represent dynamic data
     pub publisher: String,
-    pub coverage: serde_json::Value,
+    pub coverage: Option<serde_json::Value>,
     pub title: String,
     pub subjects: Vec<String>,
-    pub coverage_type: serde_json::Value,
-    pub flags:  Vec<(String, bool)>,
+    pub coverage_type: Option<serde_json::Value>,
+    pub flags:  Vec<String>,
     #[serde(rename = "ISSN")]
     pub issn: Vec<String>,
-    pub issn_type: serde_json::Value,
+    pub issn_type: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
