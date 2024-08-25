@@ -349,7 +349,7 @@ impl Crossref {
     /// Fails if there was an error in reqwest executing the request [::reqwest::RequestBuilder::send]
     async fn get_response<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
         let q = query.to_url(&self.base_url)?;
-        println!("requesting: {}", q);
+        tracing::trace!("requesting: {}", q);
 
         let res: std::result::Result<serde_json::Value, reqwest::Error> = self.client.get(&q).send().await?.json().await;
         
@@ -563,9 +563,6 @@ impl Crossref {
         let resp = self
             .get_response(&Journals::Identifier(id.to_string()))
             .await?;
-
-        println!("{:?}", resp.message);
-        println!("{:?}", resp.message_type);
       
         get_item!(Journal, resp.message, resp.message_type).map(|x| *x)
     }
