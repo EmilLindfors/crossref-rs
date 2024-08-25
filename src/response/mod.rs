@@ -52,11 +52,7 @@ impl TryFrom<serde_json::Value> for Response {
                                 msg: "message-type".to_string(),
                             },
                         )?)?;
-                let message_version =
-                    map.get("message-version")
-                        .ok_or_else(|| ErrorKind::MissingField {
-                            msg: "message-version".to_string(),
-                        })?;
+                let message_version = map.get("message-version").map_or("1.0.0", |v| v.as_str().unwrap());
                 let message = map.get("message").ok_or_else(|| ErrorKind::MissingField {
                     msg: "message".to_string(),
                 })?;
@@ -71,12 +67,7 @@ impl TryFrom<serde_json::Value> for Response {
                         })?
                         .to_string(),
                     message_type,
-                    message_version: message_version
-                        .as_str()
-                        .ok_or_else(|| ErrorKind::InvalidField {
-                            msg: "message-version".to_string(),
-                        })?
-                        .to_string(),
+                    message_version: message_version.to_string(),
                     message: Some(message),
                 })
             }
