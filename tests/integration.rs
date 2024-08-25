@@ -3,7 +3,7 @@ mod tests {
     use crossref_rs::query::journals::Journals;
     use crossref_rs::query::ResultControl;
     use crossref_rs::{
-        CrossrefBuilder, FieldQuery, WorkResultControl, WorksIdentQuery, WorksQuery,
+        CrossrefBuilder, FieldQuery, Type, WorkResultControl, WorksFilter, WorksIdentQuery, WorksQuery
     };
 
     #[tokio::test]
@@ -65,23 +65,22 @@ mod tests {
 
     #[tokio::test]
     async fn combined_query() {
+        _ = tracing_subscriber::fmt::init();
         let client = CrossrefBuilder::default().build().unwrap();
+        let span = tracing::info_span!("combined_query");
+        let _guard = span.enter();
         let response = client
             .journal_works(WorksIdentQuery {
                 id: "0013-0095".to_string(),
                 query: WorksQuery::empty()
                     //.field_query(FieldQuery::container_title("Economic Geography"))
+                    .filter(WorksFilter::Type(Type::JournalArticle))
                     .sort(crossref_rs::Sort::Created)
                     .order(crossref_rs::Order::Desc)
-                    .result_control(WorkResultControl::Standard(ResultControl::RowsOffset
-                        {
-                            rows: 1,
-                            offset: 1,
-                        })),
+                    .result_control(WorkResultControl::Standard(ResultControl::RowsOffset { rows: 10, offset: 20 })),
                         
             })
             .await;
-
         println!("{:?}", response);
         assert!(response.is_ok());
         let work = response.unwrap().items.into_iter().next().unwrap();

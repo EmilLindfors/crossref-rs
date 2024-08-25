@@ -328,7 +328,7 @@ impl TryFrom<(MessageType, serde_json::Value)> for Message {
                 Ok(Message::Work(Box::new(work)))
             }
             (MessageType::WorkList, value) => {
-                let list_resp: WorkList = from_value(value).map_err(|e| {
+                let list_resp = WorkList::try_from(value).map_err(|e| {
                     ErrorKind::InvalidField {
                         msg: "error parsing message as work-list".to_string(),
                     }
@@ -517,7 +517,14 @@ impl TryFrom<serde_json::Value> for QueryResponse {
                 let start_index = map.get("start-index").ok_or_else(|| ErrorKind::MissingField {
                     msg: "start-index".to_string(),
                 })?;
-                let search_terms = map.get("search-terms").map(|v| v.as_str().unwrap().to_string());
+                let search_terms = if let Some(v) = map.get("search-terms") {
+                    match v {
+                        Value::String(s) => Some(s.to_string()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
 
                 Ok(QueryResponse {
                     start_index: start_index

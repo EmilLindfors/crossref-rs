@@ -348,8 +348,10 @@ impl Crossref {
     /// Also fails if the json response body could be parsed into `Response`
     /// Fails if there was an error in reqwest executing the request [::reqwest::RequestBuilder::send]
     async fn get_response<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
+        let span = tracing::info_span!("crossref");
+        let _guard = span.enter();
         let q = query.to_url(&self.base_url)?;
-        tracing::trace!("requesting: {}", q);
+        println!("url: {}", q);
 
         let res: std::result::Result<serde_json::Value, reqwest::Error> = self.client.get(&q).send().await?.json().await;
         

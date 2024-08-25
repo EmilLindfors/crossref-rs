@@ -408,7 +408,9 @@ impl CrossrefQueryParam for ResultControl {
         match self {
             ResultControl::Rows(_) => Cow::Borrowed("rows"),
             ResultControl::Offset(_) => Cow::Borrowed("offset"),
-            ResultControl::RowsOffset { rows, .. } => Cow::Owned(format!("rows={}", rows)),
+            ResultControl::RowsOffset { rows, offset } => {
+                Cow::Owned(format!("rows={}&offset={}", rows, offset))
+            }
             ResultControl::Sample(_) => Cow::Borrowed("sample"),
         }
     }
@@ -418,9 +420,7 @@ impl CrossrefQueryParam for ResultControl {
             ResultControl::Rows(r) | ResultControl::Offset(r) | ResultControl::Sample(r) => {
                 Some(Cow::Owned(r.to_string()))
             }
-            ResultControl::RowsOffset { offset, .. } => {
-                Some(Cow::Owned(format!("offset={}", offset)))
-            }
+            ResultControl::RowsOffset { rows, offset } => None
         }
     }
 }
