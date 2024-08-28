@@ -1,9 +1,11 @@
+use std::{collections::HashMap, hash::Hash};
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::ErrorKind;
 
-use super::MessageType;
+use super::{JournalList, MessageType, QueryResponse};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -120,26 +122,27 @@ impl TryFrom<serde_json::Value> for Journal {
                     .ok_or(ErrorKind::InvalidTypeName {
                         name: "counts".to_string(),
                     })?;
-                let mut breakdowns: Vec<(i64, i64)> = map.get("breakdowns").ok_or(ErrorKind::MissingField {
-                    msg: "breakdowns".to_string(),
-                })?
-                .get("dois-by-issued-year")
-                .ok_or(ErrorKind::MissingField {
-                    msg: "dois-by-issued-year".to_string(),
-                })?
-                .as_array()
-                .ok_or(ErrorKind::InvalidTypeName {
-                    name: "breakdowns".to_string(),
-                })?
-                .iter()
-                .map(|v| {
-                    let arr = v.as_array().unwrap();
-                    (arr[0].as_i64().unwrap(), arr[1].as_i64().unwrap())
-                })
-                .collect();
+                let mut breakdowns: Vec<(i64, i64)> = map
+                    .get("breakdowns")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "breakdowns".to_string(),
+                    })?
+                    .get("dois-by-issued-year")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "dois-by-issued-year".to_string(),
+                    })?
+                    .as_array()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "breakdowns".to_string(),
+                    })?
+                    .iter()
+                    .map(|v| {
+                        let arr = v.as_array().unwrap();
+                        (arr[0].as_i64().unwrap(), arr[1].as_i64().unwrap())
+                    })
+                    .collect();
 
                 breakdowns.sort_by(|a, b| a.0.cmp(&b.0));
-                
 
                 let publisher = map
                     .get("publisher")
@@ -219,7 +222,8 @@ impl TryFrom<serde_json::Value> for Journal {
                     .map(|v| serde_json::from_value(v.clone()).unwrap())
                     .collect();
 
-                let last_status_check_time = DateTime::from_timestamp_millis(last_status_check_time);
+                let last_status_check_time =
+                    DateTime::from_timestamp_millis(last_status_check_time);
 
                 Ok(Journal {
                     last_status_check_time,
@@ -234,6 +238,64 @@ impl TryFrom<serde_json::Value> for Journal {
                     flags,
                     issn,
                     issn_type,
+                })
+            }
+            _ => Err(ErrorKind::InvalidMessageType {
+                name: value.to_string(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<serde_json::Value> for JournalList {
+    type Error = ErrorKind;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        match value {
+            serde_json::Value::Object(map) => {
+                let total_results = map.get("total-results").unwrap().as_i64().unwrap() as usize;
+
+                let items_per_page = map
+                    .get("items-per-page")
+                    .map(|v| v.as_i64().unwrap() as usize);
+
+                let query = map
+                    .get("query")
+                    .map(|v| match v {
+                        serde_json::Value::Object(map) => {
+                            let start_index =
+                                map.get("start-index").unwrap().as_i64().unwrap() as usize;
+                            let query = map
+                                .get("search_terms")
+                                .map(|v| v.as_str().unwrap().to_string());
+                            Some(QueryResponse {
+                                start_index,
+                                search_terms: query,
+                            })
+                        }
+                        _ => None,
+                    })
+                    .flatten();
+
+                let items = map
+                    .get("items")
+                    .ok_or(ErrorKind::MissingField {
+                        msg: "items".to_string(),
+                    })?
+                    .as_array()
+                    .ok_or(ErrorKind::InvalidTypeName {
+                        name: "items".to_string(),
+                    })?
+                    .iter()
+                    .map(|v| Journal::try_from(v.clone()).unwrap())
+                    .collect();
+
+                Ok(JournalList {
+                    total_results,
+                    items_per_page,
+                    query,
+                    facets: HashMap::new(),
+                    items,
                 })
             }
             _ => Err(ErrorKind::InvalidMessageType {

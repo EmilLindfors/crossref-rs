@@ -356,9 +356,9 @@ impl TryFrom<(MessageType, serde_json::Value)> for Message {
                 Ok(Message::Journal(Box::new(journal)))
             }
             (MessageType::JournalList, value) => {
-                let list_resp: JournalList = from_value(value).map_err(|e| {
+                let list_resp = JournalList::try_from(value).map_err(|e| {
                     ErrorKind::InvalidField {
-                        msg: "error parsing message as journal-list".to_string(),
+                        msg: format!("Error parsing journal-list: {}", e.to_string()),
                     }
                 })?;
                 Ok(Message::JournalList(list_resp))

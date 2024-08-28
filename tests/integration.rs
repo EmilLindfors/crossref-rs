@@ -90,4 +90,19 @@ mod tests {
             .unwrap()
             .contains(&"Economic Geography".to_string()));
     }
+
+    #[tokio::test]
+    async fn journal_query() {
+        let client = CrossrefBuilder::default().build().unwrap();
+        let response = client
+            .journals("Economic Geography".to_string())
+            .await;
+        println!("{:?}", response);
+        assert!(response.is_ok());
+        let journal = response.unwrap().items.into_iter().next().unwrap();
+
+        assert!(journal
+            .title
+            .contains(&"Economic Geography".to_string()));
+    }
 }

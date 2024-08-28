@@ -9,12 +9,22 @@ pub enum Journals {
     Identifier(String),
     /// target a `Work` for a specific funder at `/journals/{id}/works?query..`
     Works(WorksIdentQuery),
+    /// free form query for `/journals?query...`
+    Query(String),
 }
 
 impl CrossrefRoute for Journals {
     fn route(&self) -> Result<String> {
         match self {
             Journals::Identifier(s) => Ok(format!("{}/{}", Component::Journals.route()?, s)),
+            Journals::Query(query) => {
+                let q = query.split(' ').collect::<Vec<&str>>().join("+");
+                if q.is_empty() {
+                    Ok(Component::Journals.route()?)
+                } else {
+                    Ok(format!("{}?query={}", Component::Journals.route()?, q))
+                }
+            }
             Journals::Works(combined) => Self::combined_route(combined),
         }
     }

@@ -569,6 +569,13 @@ impl Crossref {
         get_item!(Journal, resp.message, resp.message_type).map(|x| *x)
     }
 
+    /// Return all [Journals] matching the query
+    pub async fn journals(&self, query: String) -> Result<JournalList> {
+        let resp = self.get_response(&Journals::Query(query)).await?;
+        println!("{:?}", resp);
+        get_item!(JournalList, resp.message, resp.message_type)
+    }
+
     /// Return all available `Type`
     pub async fn types(&self) -> Result<TypeList> {
         let resp = self.get_response(&Types::All).await?;
