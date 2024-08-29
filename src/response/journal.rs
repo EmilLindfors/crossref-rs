@@ -3,9 +3,10 @@ use std::{collections::HashMap, hash::Hash};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::error::ErrorKind;
+use crate::{error::ErrorKind, CrossrefQuery};
 
 use super::{JournalList, MessageType, QueryResponse};
+
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]

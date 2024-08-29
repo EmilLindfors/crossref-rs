@@ -478,6 +478,7 @@ pub enum ResourceComponent {
     Types(Types),
     /// return a list of journals in the Crossref database
     Journals(Journals),
+    
 }
 
 impl ResourceComponent {

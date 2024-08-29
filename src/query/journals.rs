@@ -149,6 +149,9 @@ impl TryFrom<String> for JournalResultControl {
 
 
 
+
+
+
 /// constructs the request payload for the `/journals` route
 #[derive(Debug, Clone)]
 pub enum Journals {
