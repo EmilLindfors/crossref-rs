@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crossref_rs::query::journals::Journals;
+    use crossref_rs::query::journals::{JournalResultControl, Journals};
     use crossref_rs::query::ResultControl;
     use crossref_rs::{
         CrossrefBuilder, FieldQuery, Type, WorkResultControl, WorksFilter, WorksIdentQuery, WorksQuery
@@ -94,8 +94,9 @@ mod tests {
     #[tokio::test]
     async fn journal_query() {
         let client = CrossrefBuilder::default().build().unwrap();
+        let control = Some(JournalResultControl::new_from_limit(10));
         let response = client
-            .journals("Economic Geography".to_string())
+            .journals("Economic Geography".to_string(), control)
             .await;
         println!("{:?}", response);
         assert!(response.is_ok());

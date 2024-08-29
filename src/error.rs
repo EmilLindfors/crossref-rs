@@ -95,6 +95,9 @@ pub enum ErrorKind {
 
     #[fail(display = "{}", error)]
     ClientError { error: String },
+
+    #[fail(display = "{}", error)]
+    InvalidResultControl { error: String },
 }
 
 impl From<ErrorKind> for Error {

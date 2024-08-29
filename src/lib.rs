@@ -278,6 +278,7 @@ use crate::error::ErrorKind;
 use crate::query::{FundersQuery, MembersQuery, ResourceComponent};
 use crate::response::{MessageType, Prefix};
 use async_iterator::Iterator;
+use query::journals::JournalResultControl;
 use reqwest::{self, Client};
 use std::default;
 use std::iter::FlatMap;
@@ -353,18 +354,13 @@ impl Crossref {
         let q = query.to_url(&self.base_url)?;
         println!("url: {}", q);
 
-        let res: std::result::Result<serde_json::Value, reqwest::Error> = self.client.get(&q).send().await?.json().await;
-        
-        match res {
-            Ok(json) => {
-                Ok(Response::try_from(json)?)
-            },
-            Err(e) => {
-                Err(ErrorKind::ReqWest { reqwest: e }.into())
+        let res: std::result::Result<serde_json::Value, reqwest::Error> =
+            self.client.get(&q).send().await?.json().await;
 
-            }
+        match res {
+            Ok(json) => Ok(Response::try_from(json)?),
+            Err(e) => Err(ErrorKind::ReqWest { reqwest: e }.into()),
         }
-        
     }
 
     //fn get_response_blocking<T: CrossrefQuery>(&self, query: &T) -> Result<Response> {
@@ -565,15 +561,23 @@ impl Crossref {
         let resp = self
             .get_response(&Journals::Identifier(id.to_string()))
             .await?;
-      
+
         get_item!(Journal, resp.message, resp.message_type).map(|x| *x)
     }
 
     /// Return all [Journals] matching the query
-    pub async fn journals(&self, query: String) -> Result<JournalList> {
-        let resp = self.get_response(&Journals::Query(query)).await?;
-        println!("{:?}", resp);
-        get_item!(JournalList, resp.message, resp.message_type)
+    pub async fn journals(
+        &self,
+        query: String,
+        result_control: Option<JournalResultControl>,
+    ) -> Result<JournalList> {
+        if let Some(rc) = result_control {
+            let resp = self.get_response(&Journals::Query(query, Some(rc))).await?;
+            return get_item!(JournalList, resp.message, resp.message_type);
+        } else {
+            let resp = self.get_response(&Journals::Query(query, None)).await?;
+            return get_item!(JournalList, resp.message, resp.message_type);
+        }
     }
 
     /// Return all available `Type`
